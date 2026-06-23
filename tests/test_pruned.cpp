@@ -31,15 +31,6 @@ static Built build(const std::string& nwk) {
     return { std::move(t2),std::move(bl) };
 }
 
-static double bl_between(const Tree& t,const double* bl,
-                         const std::string& a,const std::string& b) {
-    int ia = -1,ib = -1;
-    for (int i = 0; i < t.n_taxa; ++i) {
-        if (t.taxon_names[i] == a) ia = i;
-        if (t.taxon_names[i] == b) ib = i;
-    }
-    return Tree::bl_get(t.neighbors,bl,ia,ib);
-}
 
 int main() {
     // ── Test A: branch-length summation + basic prune ─────────────────────────
