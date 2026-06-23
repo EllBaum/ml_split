@@ -29,3 +29,36 @@ MSA slice_msa(const MSA& full, const std::vector<std::string>& names);
 // merge window.
 std::vector<std::pair<int,int>> window_edges(const Tree& t, int a0, int a1,
                                              int n = 14);
+
+// ── Merge ─────────────────────────────────────────────────────────────────────
+
+struct MergeInput {
+    std::string newick_a, newick_b;
+    std::string interest_a, interest_b;            // outgroup-of-interest per side
+    // Inherited outgroups, pre-grouped: each inner vector is one clade (a single
+    // scattered leaf is a clade of size 1). Removed for the search, restored after.
+    std::vector<std::vector<std::string>> inherited_a, inherited_b;
+};
+
+struct MergeResult {
+    std::string newick;     // merged tree over realA ∪ realB (+ restored inherited)
+    double      loglik;     // 5-BLO-optimized joined LL over realA ∪ realB
+};
+
+// Merge two subtrees. `full` must contain rows for at least realA ∪ realB (the
+// search taxa); it is sliced per side. Returns the best of the window×window
+// attachment candidates plus the inherited outgroups restored in place.
+MergeResult run_merge(const MergeInput& in, const MSA& full, SubstModel& model,
+                      int window = 14, double connector_init = 0.1);
+
+// Split-edge choice: when an inherited clade's anchor is the edge the connector
+// split (now two sub-edges (eu,mid) and (mid,ev) sharing connector node `mid`),
+// attach the WHOLE clade on each sub-edge, score, and return the better sub-edge
+// as an (a,b) pair. No BLO; the clade's internal topology/BLs stay frozen. Needs
+// the clade's sequences, so `full` must include the clade's taxa. `clade` tokens
+// must already be offset to be unique within `m_search`.
+std::pair<int,int> choose_split_subedge(const AdjTree& m_search,
+                                        const DetachedClade& clade,
+                                        int eu, int mid, int ev,
+                                        const MSA& full, SubstModel& model);
+

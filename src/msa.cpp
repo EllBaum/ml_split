@@ -290,48 +290,24 @@ static FilterResult filter_to_parsimony_informative(const std::vector<uint32_t>&
 
 // Public API
 
-MSA MSA::from_fasta(const std::string& path,
-                     bool parsimony_informative_only) {
-    return from_fasta(path, {}, parsimony_informative_only);
-}
+// Shared builder: (names, seqs) → encoded → dedup → filter → MSA.
+static MSA from_raw(const std::vector<std::string>& names,
+                    const std::vector<std::string>& seqs,
+                    bool parsimony_informative_only) {
+    int n_taxa = static_cast<int>(names.size());
+    if (n_taxa == 0 || seqs.empty())
+        throw std::runtime_error("MSA: empty alignment");
+    int n_sites = static_cast<int>(seqs[0].size());
+    for (int i = 0; i < n_taxa; ++i)
+        if (static_cast<int>(seqs[i].size()) != n_sites)
+            throw std::runtime_error("MSA: sequences have unequal length");
 
-MSA MSA::from_fasta(const std::string& path,
-                     const std::vector<std::string>& taxon_order,
-                     bool parsimony_informative_only) {
-    struct RawMSA raw = read_fasta(path);
-    int n_taxa = static_cast<int>(raw.names.size());
-    int n_sites = static_cast<int>(raw.seqs[0].size());
+    SeqType st = detect_type(seqs);
 
-    SeqType st = detect_type(raw.seqs);
-
-    // Reorder taxa if requested
-    std::vector<std::string> names = raw.names;
-    std::vector<std::string> seqs = raw.seqs;
-
-    if (!taxon_order.empty()) {
-        assert(static_cast<int>(taxon_order.size()) == n_taxa);
-        std::unordered_map<std::string, int> name_to_row;
-        for (int i = 0; i < n_taxa; ++i)
-            name_to_row[raw.names[i]] = i;
-
-        names.resize(n_taxa);
-        seqs.resize(n_taxa);
-        for (int i = 0; i < n_taxa; ++i) {
-            auto it = name_to_row.find(taxon_order[i]);
-            if (it == name_to_row.end())
-                throw std::runtime_error("Unknown taxon in taxon_order: " + taxon_order[i]);
-            names[i] = taxon_order[i];
-            seqs[i] = raw.seqs[it->second];
-        }
-    }
-
-    // Encode
     std::vector<uint32_t> encoded = encode(seqs, st, n_taxa, n_sites);
-
-    // Deduplicate
     struct DeduplicateResult dedup = deduplicate(encoded, n_taxa, n_sites);
 
-    // Remove fully-undetermined columns (all taxa gap-only) — matches RAxML behaviour.
+    // Remove fully-undetermined columns (all taxa gap-only) — matches RAxML.
     {
         uint32_t state_mask = (st == SeqType::AA) ? AA_ALL_STATES : (DNA_GAP - 1u);
         std::vector<int> keep;
@@ -360,8 +336,6 @@ MSA MSA::from_fasta(const std::string& path,
         }
     }
 
-    // Filter to parsimony-informative sites only if requested.
-    // Constant sites are informative for likelihood - keep them by default.
     struct FilterResult filtered;
     if (parsimony_informative_only) {
         filtered = filter_to_parsimony_informative(dedup.patterns, dedup.weights,
@@ -375,11 +349,53 @@ MSA MSA::from_fasta(const std::string& path,
     msa.n_taxa = n_taxa;
     msa.n_patterns = filtered.n_patterns;
     msa.n_sites_orig = n_sites;
-    msa.taxon_names = std::move(names);
+    msa.taxon_names = names;
     msa.data = std::move(filtered.patterns);
     msa.weights = std::move(filtered.weights);
     msa.parsimony_offset = filtered.offset;
     return msa;
+}
+
+MSA MSA::from_fasta(const std::string& path,
+                     bool parsimony_informative_only) {
+    return from_fasta(path, {}, parsimony_informative_only);
+}
+
+MSA MSA::from_fasta(const std::string& path,
+                     const std::vector<std::string>& taxon_order,
+                     bool parsimony_informative_only) {
+    struct RawMSA raw = read_fasta(path);
+    int n_taxa = static_cast<int>(raw.names.size());
+
+    // Reorder taxa if requested
+    std::vector<std::string> names = raw.names;
+    std::vector<std::string> seqs = raw.seqs;
+
+    if (!taxon_order.empty()) {
+        assert(static_cast<int>(taxon_order.size()) == n_taxa);
+        std::unordered_map<std::string, int> name_to_row;
+        for (int i = 0; i < n_taxa; ++i)
+            name_to_row[raw.names[i]] = i;
+
+        names.resize(n_taxa);
+        seqs.resize(n_taxa);
+        for (int i = 0; i < n_taxa; ++i) {
+            auto it = name_to_row.find(taxon_order[i]);
+            if (it == name_to_row.end())
+                throw std::runtime_error("Unknown taxon in taxon_order: " + taxon_order[i]);
+            names[i] = taxon_order[i];
+            seqs[i] = raw.seqs[it->second];
+        }
+    }
+
+    // Encode + dedup + filter + build via the shared path.
+    return from_raw(names, seqs, parsimony_informative_only);
+}
+
+MSA MSA::from_sequences(const std::vector<std::string>& names,
+                        const std::vector<std::string>& seqs,
+                        bool parsimony_informative_only) {
+    return from_raw(names, seqs, parsimony_informative_only);
 }
 
 void MSA::print_summary() const {
