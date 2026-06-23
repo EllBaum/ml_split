@@ -1,0 +1,7 @@
+build/
+*.o
+*.so
+test_pruned
+test_merge_prep
+__pycache__/
+*.whl
