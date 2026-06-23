@@ -722,7 +722,7 @@ double LikelihoodScorer::_optimize_five_branches_at_nni(
     const double* rb_clv_in, const double* rb_ls_in,
     const double* ro_clv_in, const double* ro_ls_in,
     const double* nb_clv_in, const double* nb_ls_in,
-    double eps_5blo_in) const
+    double eps_5blo_in, const double* init_bl5) const
 {
     PROF_SCOPE("_5blo_nni");
     COUNTER_INC("5blo.calls");
@@ -799,11 +799,22 @@ double LikelihoodScorer::_optimize_five_branches_at_nni(
     }
 
     // ── 2. Initial branch lengths (split/merge convention) ───────────────────
-    double bl_pu_ra = bl_[prune_u * n_ + ra];
-    double bl_pu_pv = bl_[prune_u * n_ + prune_v];
-    double bl_pu_rb = 0.5 * bl_[ra * n_ + rb];                          // split
-    double bl_ra_nb = bl_[prune_u * n_ + ra] + bl_[prune_u * n_ + nb_other]; // merged
-    double bl_ra_ro = bl_[ra * n_ + ra_other];
+    // Merge hook: init_bl5 supplies them directly (order = bl_out), so the
+    // hypothetical connector nodes need no entry in bl_.
+    double bl_pu_ra, bl_pu_pv, bl_pu_rb, bl_ra_nb, bl_ra_ro;
+    if (init_bl5) {
+        bl_pu_ra = init_bl5[0];
+        bl_pu_pv = init_bl5[1];
+        bl_pu_rb = init_bl5[2];
+        bl_ra_nb = init_bl5[3];
+        bl_ra_ro = init_bl5[4];
+    } else {
+        bl_pu_ra = bl_[prune_u * n_ + ra];
+        bl_pu_pv = bl_[prune_u * n_ + prune_v];
+        bl_pu_rb = 0.5 * bl_[ra * n_ + rb];                          // split
+        bl_ra_nb = bl_[prune_u * n_ + ra] + bl_[prune_u * n_ + nb_other]; // merged
+        bl_ra_ro = bl_[ra * n_ + ra_other];
+    }
 
     // ── 3. Directional CLVs at pu and ra (3 each) ────────────────────────────
     // clv_pu_toward_X = CLV at pu from its two sides other than X (and likewise

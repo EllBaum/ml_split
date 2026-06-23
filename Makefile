@@ -22,7 +22,7 @@ SRC_DIR  := src
 TEST_DIR := tests
 BUILD    := build
 
-TESTS := test_pruned test_merge_prep test_scorer_smoke
+TESTS := test_pruned test_merge_prep test_scorer_smoke test_merge_hook
 
 .PHONY: all test clean
 
@@ -59,6 +59,7 @@ $(BUILD)/scorer.o: $(SRC_DIR)/likelihood_scorer_unit.cpp $(SCORER_PIECES) $(SCOR
 $(BUILD)/test_pruned.o:        $(TEST_DIR)/test_pruned.cpp $(SRC_DIR)/tree.h
 $(BUILD)/test_merge_prep.o:    $(TEST_DIR)/test_merge_prep.cpp $(SRC_DIR)/merge_prep.h $(SRC_DIR)/tree.h
 $(BUILD)/test_scorer_smoke.o:  $(TEST_DIR)/test_scorer_smoke.cpp $(SCORER_HDRS)
+$(BUILD)/test_merge_hook.o:    $(TEST_DIR)/test_merge_hook.cpp $(SCORER_HDRS)
 
 # ── link ──────────────────────────────────────────────────────────────────────
 test_pruned:        $(BUILD)/tree.o $(BUILD)/test_pruned.o
@@ -70,10 +71,14 @@ test_merge_prep:    $(BUILD)/tree.o $(BUILD)/merge_prep.o $(BUILD)/test_merge_pr
 test_scorer_smoke:  $(BUILD)/scorer.o $(BUILD)/tree.o $(BUILD)/msa.o $(BUILD)/test_scorer_smoke.o
 	$(CXX) $(CXXFLAGS) $^ -o $@
 
+test_merge_hook:    $(BUILD)/scorer.o $(BUILD)/tree.o $(BUILD)/msa.o $(BUILD)/test_merge_hook.o
+	$(CXX) $(CXXFLAGS) $^ -o $@
+
 test: $(TESTS)
 	@echo "-- test_pruned --";       ./test_pruned
 	@echo "-- test_merge_prep --";   ./test_merge_prep
 	@echo "-- test_scorer_smoke --"; ./test_scorer_smoke
+	@echo "-- test_merge_hook --";   ./test_merge_hook
 
 clean:
 	rm -rf $(BUILD) $(TESTS)

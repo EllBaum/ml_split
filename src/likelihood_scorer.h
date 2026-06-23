@@ -66,6 +66,47 @@ public:
 
     void commit(const LikelihoodSPRCandidate& cand);
 
+    // ── Merge hooks (used by MergeSession; this is a separate codebase) ────────
+
+    int n_states()   const { return K_; }
+    int n_patterns() const { return L_; }
+
+    // Directional CLV at `node` looking away from `excl` (and its log-scale),
+    // over this scorer's pattern set. After construction the tree's CLVs are
+    // materialized and clean, so for a frozen subtree this is a cheap cached
+    // read — the rigid-subtree boundary condition for a merge.
+    void clv(int node, int excl,
+             std::vector<double>& clv_out, std::vector<double>& ls_out) const {
+        clv_out.resize((size_t)K_ * L_);
+        ls_out.resize(L_);
+        _clv(node, excl, clv_out.data(), ls_out.data());
+    }
+
+    // Join two frozen subtrees at a fresh connector and optimize the 5 branches
+    // around it. Boundary CLVs are the directional CLVs at the two anchor edges:
+    // A side (pv, rb) from scorer_A, B side (nb, ro) from scorer_B — all over the
+    // same (sliced) pattern set. init_bl5 = bl_out order =
+    //   {connector, newA-pv, newA-rb, newB-nb, newB-ro}.
+    // Call on either sub-scorer (model/K/L/weights are shared). Returns the
+    // optimized joined log-likelihood; bl_out[5] filled in the same order.
+    double optimize_five_for_merge(
+        const double* pv_clv, const double* pv_ls,
+        const double* rb_clv, const double* rb_ls,
+        const double* nb_clv, const double* nb_ls,
+        const double* ro_clv, const double* ro_ls,
+        const double init_bl5[5], double bl_out[5],
+        double eps = 0.1) const
+    {
+        // Dummy node ids: with all 4 CLVs supplied and init_bl5 set, the ids are
+        // never used to index tree_/bl_ (no _clv fallback, no bl_ reads).
+        return _optimize_five_branches_at_nni(
+            /*prune_u=*/0, /*prune_v=*/1, /*ra=*/2, /*rb=*/3,
+            /*nb_other=*/4, /*ra_other=*/5, bl_out,
+            pv_clv, pv_ls, rb_clv, rb_ls,
+            ro_clv, ro_ls, nb_clv, nb_ls,
+            eps, init_bl5);
+    }
+
     // Let a later thorough pass re-examine centers the FAST walk stamped.
     void reset_dedup_seen() { _clear_seen_radius1(); }
 
@@ -217,7 +258,11 @@ private:
         const double* rb_clv_in = nullptr, const double* rb_ls_in = nullptr,
         const double* ro_clv_in = nullptr, const double* ro_ls_in = nullptr,
         const double* nb_clv_in = nullptr, const double* nb_ls_in = nullptr,
-        double eps_5blo_in = 1000.0
+        double eps_5blo_in = 1000.0,
+        // Merge hook: when non-null, the 5 initial branch lengths are taken from
+        // init_bl5 (order = bl_out) instead of read from bl_ by node id. Lets the
+        // merge drive this with hypothetical connector nodes that aren't in tree_.
+        const double* init_bl5 = nullptr
     ) const;
 
     // n*n stamps vs a generation counter -> O(1) clear (memset only on wrap).
