@@ -17,8 +17,27 @@
 #include "jck.h"
 #include <memory>
 #include <stdexcept>
+#include <unordered_map>
 
 namespace py = pybind11;
+
+static MSA dict_to_msa_pair(const py::dict& da, const py::dict& db) {
+    // Union by name; a taxon in both must carry identical sequence.
+    std::vector<std::string> names, seqs;
+    std::unordered_map<std::string, size_t> idx;
+    auto add = [&](const py::dict& d) {
+        for (auto kv : d) {
+            std::string n = py::cast<std::string>(py::str(kv.first));
+            std::string s = py::cast<std::string>(py::str(kv.second));
+            auto it = idx.find(n);
+            if (it == idx.end()) { idx[n] = names.size(); names.push_back(n); seqs.push_back(s); }
+            else if (seqs[it->second] != s)
+                throw std::invalid_argument("taxon '" + n + "' has different sequences in the two MSAs");
+        }
+    };
+    add(da); add(db);
+    return MSA::from_sequences(names, seqs, false);
+}
 
 static MSA build_msa(const py::object& msa) {
     if (py::isinstance<py::str>(msa))
@@ -56,11 +75,16 @@ PYBIND11_MODULE(ml_split, mod) {
     mod.def("merge",
         [](std::string newick_a, std::string newick_b,
            std::string interest_a, std::string interest_b,
-           py::object msa,
+           py::object msa, py::object msa_a, py::object msa_b,
            std::vector<std::vector<std::string>> inherited_a,
            std::vector<std::vector<std::string>> inherited_b,
            std::string model, int window, double connector_init) {
-            MSA full = build_msa(msa);
+            MSA full = (!msa.is_none())
+                ? build_msa(msa)
+                : (!msa_a.is_none() && !msa_b.is_none())
+                    ? dict_to_msa_pair(msa_a.cast<py::dict>(), msa_b.cast<py::dict>())
+                    : throw std::invalid_argument(
+                          "provide either msa=... or both msa_a=... and msa_b=...");
             auto mdl = build_model(model, full);
             MergeInput in;
             in.newick_a   = std::move(newick_a);   in.newick_b   = std::move(newick_b);
@@ -70,13 +94,14 @@ PYBIND11_MODULE(ml_split, mod) {
         },
         py::arg("newick_a"), py::arg("newick_b"),
         py::arg("interest_a"), py::arg("interest_b"),
-        py::arg("msa"),
+        py::arg("msa") = py::none(),
+        py::arg("msa_a") = py::none(),
+        py::arg("msa_b") = py::none(),
         py::arg("inherited_a") = std::vector<std::vector<std::string>>{},
         py::arg("inherited_b") = std::vector<std::vector<std::string>>{},
         py::arg("model") = "JTT",
         py::arg("window") = 14,
         py::arg("connector_init") = 0.1,
-        "Merge two subtrees at the outgroup-of-interest windows; returns "
-        "MergeResult(newick, loglik). inherited_a/b are lists of clades "
-        "(each a list of leaf names). msa is a FASTA path or {name: seq} dict.");
+        "Merge two subtrees. Alignment as msa=(path|dict) OR msa_a=dict, msa_b=dict "
+        "(merged by name). inherited_a/b are lists of clades (lists of leaf names).");
 }

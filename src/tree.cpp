@@ -273,7 +273,7 @@ Tree Tree::spr_move(int prune_u, int prune_v,
     }
 
     int others[2];
-    int nc = neighbors_except(prune_u, prune_v, others);
+    [[maybe_unused]] int nc = neighbors_except(prune_u, prune_v, others);
     assert(nc == 2);
     int nb1 = others[0], nb2 = others[1];
 
@@ -330,7 +330,7 @@ std::string Tree::subtree_newick(int node, int exclude,
         ss << taxon_names[node];
     } else {
         int nbs[2];
-        int nc = neighbors_except(node, exclude, nbs);
+        [[maybe_unused]] int nc = neighbors_except(node, exclude, nbs);
         assert(nc == 2);
         ss << "("
            << subtree_newick(nbs[0], node, bl)
@@ -350,7 +350,7 @@ std::string Tree::subtree_newick(int node, int exclude,
 std::string Tree::to_newick(const double* bl) const {
     int start = n_taxa;
     int nbs[3];
-    int nc = neighbors_of(start, nbs);
+    [[maybe_unused]] int nc = neighbors_of(start, nbs);
     assert(nc == 3);
 
     std::ostringstream ss;

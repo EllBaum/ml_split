@@ -1,5 +1,6 @@
 // merge_session.cpp — see merge_session.h.
 #include "merge_session.h"
+#include <functional>
 #include <queue>
 #include <set>
 #include <unordered_map>
@@ -72,6 +73,9 @@ std::vector<std::pair<int,int>> window_edges(const Tree& t, int a0, int a1, int 
 
 namespace {
 
+std::vector<std::set<std::string>>
+find_inherited_clades(const AdjTree& M, const std::set<std::string>& inh);  // fwd
+
 struct SidePrep {
     Tree                              tree;            // A' (real leaves only)
     std::vector<double>               bl;
@@ -91,11 +95,12 @@ SidePrep prep_side(const std::string& newick,
 
     std::vector<std::string> remove;
     remove.push_back(interest);
-    std::vector<int> clade_first;                  // index into remove for each clade
-    for (auto& cl : inherited) {
-        clade_first.push_back((int)remove.size());
-        for (auto& nm : cl) remove.push_back(nm);
-    }
+    std::set<std::string> inh_names;                 // flatten caller grouping
+    for (auto& cl : inherited)
+        for (auto& nm : cl) inh_names.insert(nm);
+    for (auto& nm : inh_names) remove.push_back(nm);
+    std::unordered_map<std::string,int> rem_idx;
+    for (int i = 0; i < (int)remove.size(); ++i) rem_idx[remove[i]] = i;
 
     PruneResult pr = t.pruned(remove, bl.data());
 
@@ -104,12 +109,21 @@ SidePrep prep_side(const std::string& newick,
     sp.bl              = std::move(pr.bl);
     sp.interest_anchor = pr.anchors[0];
 
-    for (size_t k = 0; k < inherited.size(); ++k) {
-        std::set<std::string> cset(inherited[k].begin(), inherited[k].end());
-        AdjTree acopy = AdjTree::from(t, bl.data());   // fresh copy per clade
-        DetachedClade cap = detach_clade(acopy, cset); // capture subtree+stem
+    // Build the full adjacency, remove the interest outgroup, then auto-detect
+    // the maximal inherited subtrees and capture each WITH its structure. The
+    // anchor of each clade is the A' edge where it hangs (any member leaf's
+    // recorded anchor — all members of a connected clade collapse to one edge).
+    AdjTree full = AdjTree::from(t, bl.data());
+    if (!interest.empty()) {
+        std::set<std::string> is{interest};
+        detach_clade(full, is);                       // suppress interest, discard
+    }
+    auto clades = find_inherited_clades(full, inh_names);
+    for (auto& cset : clades) {
+        AdjTree acopy = full;                         // interest already removed
+        DetachedClade cap = detach_clade(acopy, cset);
         sp.clades.push_back(std::move(cap));
-        sp.clade_anchor.push_back(pr.anchors[clade_first[k]]);  // shared clade anchor
+        sp.clade_anchor.push_back(pr.anchors[rem_idx[*cset.begin()]]);
     }
     return sp;
 }
@@ -119,6 +133,70 @@ bool edge_exists(const AdjTree& M, int u, int v) {
     if (it == M.adj.end()) return false;
     for (auto& p : it->second) if (p.first == v) return true;
     return false;
+}
+
+// Is `target` reachable from `start` without crossing `avoid`?
+bool reachable(const AdjTree& M, int start, int target, int avoid) {
+    std::set<int> seen{avoid};
+    std::vector<int> stack{start};
+    while (!stack.empty()) {
+        int u = stack.back(); stack.pop_back();
+        if (u == target) return true;
+        if (!seen.insert(u).second) continue;
+        auto it = M.adj.find(u);
+        if (it == M.adj.end()) continue;
+        for (auto& pr : it->second) if (pr.first != avoid) stack.push_back(pr.first);
+    }
+    return false;
+}
+
+// Current edge in the region of the (possibly already-consumed) anchor (p,q):
+// if (p,q) still exists, that; else the edge (p, n) where n is p's neighbor on
+// the path toward q (the anchor edge was split by an earlier graft / connector).
+std::pair<int,int> region_edge(const AdjTree& M, int p, int q) {
+    if (edge_exists(M, p, q)) return {p, q};
+    for (auto& pr : M.adj.at(p))
+        if (reachable(M, pr.first, q, p)) return {p, pr.first};
+    throw std::runtime_error("region_edge: no path from anchor endpoint to its mate");
+}
+
+// Maximal connected all-inherited subtrees of M (with the interest outgroup
+// already removed). Two inherited clades can share a host anchor edge only if
+// they are connected through internal nodes — in which case they are returned
+// as ONE clade with their relative structure intact. A real taxon between two
+// inherited groups would split the host edge, giving them distinct anchors.
+// So this grouping makes restore collision-free and structure-preserving.
+std::vector<std::set<std::string>>
+find_inherited_clades(const AdjTree& M, const std::set<std::string>& inh) {
+    std::vector<std::set<std::string>> clades;
+    int root = INVALID;
+    for (auto& kv : M.leaf_name)
+        if (!inh.count(kv.second) && M.adj.count(kv.first)) { root = kv.first; break; }
+    if (root == INVALID) return clades;                 // no real leaf (degenerate)
+
+    std::function<std::pair<std::set<std::string>,bool>(int,int)> dfs =
+        [&](int node, int parent) -> std::pair<std::set<std::string>,bool> {
+        if (M.is_leaf(node)) {
+            const std::string& nm = M.leaf_name.at(node);
+            return { std::set<std::string>{nm}, (bool)inh.count(nm) };
+        }
+        std::set<std::string> all; bool alli = true;
+        std::vector<std::pair<std::set<std::string>,bool>> kids;
+        for (auto& pr : M.adj.at(node)) {
+            if (pr.first == parent) continue;
+            auto r = dfs(pr.first, node);
+            all.insert(r.first.begin(), r.first.end());
+            if (!r.second) alli = false;
+            kids.push_back(std::move(r));
+        }
+        if (alli) return { all, true };                 // bubble up to parent
+        for (auto& k : kids) if (k.second) clades.push_back(k.first);  // emit maximal
+        return { all, false };
+    };
+    int rn = M.adj.at(root)[0].first;                   // root leaf's single neighbor
+    auto top = dfs(rn, root);
+    if (top.second) clades.push_back(top.first);        // whole tree minus root is inh
+    return clades;
 }
 
 // Re-token a captured clade into a unique band so it can't collide in M.
@@ -239,23 +317,34 @@ MergeResult run_merge(const MergeInput& in, const MSA& full, SubstModel& model,
     const int CLADE_BAND = A.tree.n_nodes + B.tree.n_nodes + 1000;
     auto restore = [&](std::vector<DetachedClade>& clades,
                        std::vector<std::pair<int,int>>& anchors,
-                       int off, int newNode, int band) {
+                       int off, int cx, int cy, int newNode, int band) {
         for (size_t k = 0; k < clades.size(); ++k) {
             DetachedClade d = offset_clade(clades[k], band + (int)k * 100000);
             int p = anchors[k].first + off, q = anchors[k].second + off;
-            if (edge_exists(M, p, q)) {
-                regraft_clade_on(M, d, p, q, 0.5);          // non-split
+            bool is_conn = (std::min(p, q) == std::min(cx, cy) &&
+                            std::max(p, q) == std::max(cx, cy));
+            std::pair<int,int> e;
+            if (is_conn) {
+                // Connector landed on this clade's anchor edge → the edge is now
+                // (cx,newNode) and (newNode,cy). Score the whole clade on each
+                // sub-edge and keep the better.
+                e = choose_split_subedge(M_search, d, cx, newNode, cy, full, model);
+                if (!edge_exists(M, e.first, e.second))   // double-consumed: fall back
+                    e = region_edge(M, p, q);
+            } else if (edge_exists(M, p, q)) {
+                e = {p, q};                                // anchor intact
             } else {
-                // Split case: connector landed on this clade's anchor edge, now
-                // two sub-edges (p,newNode) and (newNode,q). Score the whole
-                // clade on each and keep the better.
-                auto e = choose_split_subedge(M_search, d, p, newNode, q, full, model);
-                regraft_clade_on(M, d, e.first, e.second, 0.5);
+                // A previous inherited graft already split this anchor edge
+                // (strung-along clades sharing one anchor). Attach in the region.
+                e = region_edge(M, p, q);
             }
+            regraft_clade_on(M, d, e.first, e.second, 0.5);
         }
     };
-    restore(A.clades, A.clade_anchor, 0,     newA, CLADE_BAND);
-    restore(B.clades, B.clade_anchor, B_off, newB, CLADE_BAND + 50000000);
+    restore(A.clades, A.clade_anchor, 0,
+            best_eA.first, best_eA.second, newA, CLADE_BAND);
+    restore(B.clades, B.clade_anchor, B_off,
+            best_eB.first + B_off, best_eB.second + B_off, newB, CLADE_BAND + 50000000);
 
     std::vector<double> M_bl;
     Tree M_tree = M.to_tree(M_bl);

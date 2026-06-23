@@ -52,6 +52,12 @@ public:
                           const std::vector<std::string>& taxon_order,
                           bool parsimony_informative_only = false);
 
+    // Build directly from in-memory sequences (e.g. a {name: seq} dict), using
+    // the same encode/dedup/filter path as from_fasta. names[i] labels seqs[i].
+    static MSA from_sequences(const std::vector<std::string>& names,
+                              const std::vector<std::string>& seqs,
+                              bool parsimony_informative_only = false);
+
     // Debug
     void print_summary() const;
 };

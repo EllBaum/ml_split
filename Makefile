@@ -22,7 +22,7 @@ TEST_DIR := tests
 BUILD    := build
 
 TESTS := test_pruned test_merge_prep test_scorer_smoke test_merge_hook \
-         test_merge_util test_merge_e2e test_inherited_e2e test_split_choice test_msa_dict
+         test_merge_util test_merge_e2e test_inherited_e2e test_inherited_structure test_split_choice test_msa_dict
 
 .PHONY: all test clean
 all: $(TESTS)
@@ -64,6 +64,7 @@ $(BUILD)/test_merge_hook.o:    $(TEST_DIR)/test_merge_hook.cpp $(SCORER_HDRS)
 $(BUILD)/test_merge_util.o:    $(TEST_DIR)/test_merge_util.cpp $(SRC_DIR)/merge_session.h
 $(BUILD)/test_merge_e2e.o:     $(TEST_DIR)/test_merge_e2e.cpp $(SRC_DIR)/merge_session.h $(SCORER_HDRS)
 $(BUILD)/test_inherited_e2e.o: $(TEST_DIR)/test_inherited_e2e.cpp $(SRC_DIR)/merge_session.h $(SCORER_HDRS)
+$(BUILD)/test_inherited_structure.o: $(TEST_DIR)/test_inherited_structure.cpp $(SRC_DIR)/merge_session.h $(SCORER_HDRS)
 $(BUILD)/test_split_choice.o:  $(TEST_DIR)/test_split_choice.cpp $(SRC_DIR)/merge_session.h $(SRC_DIR)/merge_prep.h $(SCORER_HDRS)
 $(BUILD)/test_msa_dict.o:      $(TEST_DIR)/test_msa_dict.cpp $(SRC_DIR)/msa.h
 
@@ -85,6 +86,8 @@ test_merge_e2e:     $(MERGE_OBJ) $(BUILD)/test_merge_e2e.o
 	$(CXX) $(CXXFLAGS) $^ -o $@
 test_inherited_e2e: $(MERGE_OBJ) $(BUILD)/test_inherited_e2e.o
 	$(CXX) $(CXXFLAGS) $^ -o $@
+test_inherited_structure: $(MERGE_OBJ) $(BUILD)/test_inherited_structure.o
+	$(CXX) $(CXXFLAGS) $^ -o $@
 test_split_choice:  $(MERGE_OBJ) $(BUILD)/test_split_choice.o
 	$(CXX) $(CXXFLAGS) $^ -o $@
 test_msa_dict:      $(BUILD)/msa.o $(BUILD)/test_msa_dict.o
@@ -98,6 +101,7 @@ test: $(TESTS)
 	@echo "-- test_merge_util --";   ./test_merge_util
 	@echo "-- test_merge_e2e --";    ./test_merge_e2e
 	@echo "-- test_inherited_e2e --"; ./test_inherited_e2e
+	@echo "-- test_inherited_structure --"; ./test_inherited_structure
 	@echo "-- test_split_choice --";  ./test_split_choice
 	@echo "-- test_msa_dict --";     ./test_msa_dict
 
