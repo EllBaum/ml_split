@@ -1,0 +1,2 @@
+msa,status,n_taxa,n_realA,n_realB,n_inherited,n_inhA,n_inhB,O_A,O_B,merged_taxa,taxa_ok,loglik,rf_true,nrf_true,n_common,faith_a,faith_b,faithful,ll_score,ll_raxml,ll_diff,raxml_agree,raxml_err,mode,seed,budget,time_sec,error
+random_tree_320,ok,200,103,77,20,11,9,T196,T189,200,1,-110607.9486,20,0.0508,200,0,0,1,-110607.9486,-110607.9486,0.0,1,,ml,42,0,36.82,

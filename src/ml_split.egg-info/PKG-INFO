@@ -1,0 +1,5 @@
+Metadata-Version: 2.4
+Name: ml_split
+Version: 0.1.0
+Summary: Outgroup-based subtree merge for divide-and-conquer tree building
+Requires-Python: >=3.8

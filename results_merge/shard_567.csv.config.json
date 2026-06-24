@@ -1,0 +1,23 @@
+{
+  "msa_dir": "/groups/pupko/ellabaumer/sim_trees/MSAs_200",
+  "tree_dir": "/groups/pupko/ellabaumer/sim_trees/trees_200",
+  "search_cli": "/groups/pupko/ellabaumer/ML_trees_cpp2/mltree/search_cli",
+  "out_csv": "/groups/pupko/ellabaumer/ML_split/ml_split/results_merge/shard_567.csv",
+  "work_dir": "/groups/pupko/ellabaumer/ML_split/ml_split/results_merge/work",
+  "budget": 0,
+  "seed": 42,
+  "frac_a": 0.45,
+  "frac_b": 0.45,
+  "model": "JC",
+  "induced": false,
+  "raxml": "/groups/pupko/ellabaumer/miniconda3/envs/raxmlng/bin/raxml-ng",
+  "msa_suffix": "",
+  "tree_suffix": "",
+  "msa_glob": "*.fasta",
+  "shard_index": 567,
+  "shard_count": 600,
+  "resume": true,
+  "keep_trees": false,
+  "git_commit": "43e55b763de93f2175207cf0ed908c327eeb8783",
+  "n_msas_in_shard": 1
+}

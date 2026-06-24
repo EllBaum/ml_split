@@ -13,6 +13,7 @@
 #include "merge_session.h"
 #include "msa.h"
 #include "subst_model.h"
+#include "likelihood_scorer.h"
 #include "jtt.h"
 #include "jck.h"
 #include <memory>
@@ -71,6 +72,23 @@ PYBIND11_MODULE(ml_split, mod) {
         .def("__repr__", [](const MergeResult& r) {
             return "<MergeResult loglik=" + std::to_string(r.loglik) + ">";
         });
+
+    mod.def("score",
+        [](const std::string& newick, py::object msa, std::string model) {
+            MSA full = build_msa(msa);
+            std::vector<double> tmp(1 << 16, 0.1);
+            Tree t0 = Tree::from_newick(newick, tmp.data());
+            std::vector<double> bl((size_t)t0.n_nodes * 3, 0.1);
+            Tree t = Tree::from_newick(newick, bl.data(), t0.taxon_names);
+            MSA sl = slice_msa(full, t.taxon_names);   // tree-order rows
+            auto mdl = build_model(model, sl);
+            LikelihoodScorer S(t, sl, *mdl, bl.data());
+            return S.score();
+        },
+        py::arg("newick"), py::arg("msa"), py::arg("model") = "JTT",
+        "Log-likelihood of `newick` evaluated at its own branch lengths, on the "
+        "given alignment (path or dict) under `model`. No BL/topology optimization "
+        "— for cross-checking a fixed tree against e.g. raxml-ng --opt-branches off.");
 
     mod.def("merge",
         [](std::string newick_a, std::string newick_b,

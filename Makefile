@@ -22,7 +22,7 @@ TEST_DIR := tests
 BUILD    := build
 
 TESTS := test_pruned test_merge_prep test_scorer_smoke test_merge_hook \
-         test_merge_util test_merge_e2e test_inherited_e2e test_inherited_structure test_split_choice test_msa_dict
+         test_merge_util test_merge_e2e test_inherited_e2e test_inherited_structure test_split_choice test_msa_dict test_coanchored_order
 
 .PHONY: all test clean
 all: $(TESTS)
@@ -67,6 +67,7 @@ $(BUILD)/test_inherited_e2e.o: $(TEST_DIR)/test_inherited_e2e.cpp $(SRC_DIR)/mer
 $(BUILD)/test_inherited_structure.o: $(TEST_DIR)/test_inherited_structure.cpp $(SRC_DIR)/merge_session.h $(SCORER_HDRS)
 $(BUILD)/test_split_choice.o:  $(TEST_DIR)/test_split_choice.cpp $(SRC_DIR)/merge_session.h $(SRC_DIR)/merge_prep.h $(SCORER_HDRS)
 $(BUILD)/test_msa_dict.o:      $(TEST_DIR)/test_msa_dict.cpp $(SRC_DIR)/msa.h
+$(BUILD)/test_coanchored_order.o: $(TEST_DIR)/test_coanchored_order.cpp $(SRC_DIR)/merge_session.h $(SCORER_HDRS)
 
 # ── link ──────────────────────────────────────────────────────────────────────
 MERGE_OBJ := $(BUILD)/scorer.o $(BUILD)/tree.o $(BUILD)/msa.o \
@@ -104,6 +105,23 @@ test: $(TESTS)
 	@echo "-- test_inherited_structure --"; ./test_inherited_structure
 	@echo "-- test_split_choice --";  ./test_split_choice
 	@echo "-- test_msa_dict --";     ./test_msa_dict
+	@echo "-- test_coanchored_order --"; ./test_coanchored_order
 
 clean:
 	rm -rf $(BUILD) $(TESTS)
+test_coanchored_order: $(MERGE_OBJ) $(BUILD)/test_coanchored_order.o
+	$(CXX) $(CXXFLAGS) $^ -o $@
+
+# ── Pure-evaluation benchmark ────────────────────────────────────────────────
+# Built with the DELIVERED wheel's flags (-mavx2 global; AVX-512 kernels still
+# active via their target() attribute + runtime dispatch), so the number
+# reflects what the colleagues actually run. For a peak engine-vs-raxml number
+# on AVX-512 nodes, override e.g.:
+#   make bench_eval BENCH_SIMD="-mavx2 -mfma -mavx512f -mavx512cd -mavx512dq -mavx512bw -mavx512vl"
+BENCH_SIMD ?= -mavx2 -mfma
+bench_eval: $(TEST_DIR)/bench_eval.cpp $(SRC_DIR)/likelihood_scorer_unit.cpp \
+            $(SRC_DIR)/tree.cpp $(SRC_DIR)/msa.cpp $(SCORER_PIECES) $(SCORER_HDRS) \
+            $(SRC_DIR)/msa.h $(SRC_DIR)/tree.h
+	$(CXX) $(CXXSTD) $(OPT) $(WARN) $(BENCH_SIMD) $(DEFS) $(INC) \
+	    $(TEST_DIR)/bench_eval.cpp $(SRC_DIR)/likelihood_scorer_unit.cpp \
+	    $(SRC_DIR)/tree.cpp $(SRC_DIR)/msa.cpp -o $@

@@ -82,7 +82,28 @@ struct SidePrep {
     std::pair<int,int>                interest_anchor; // in A' ids (seeds window)
     std::vector<DetachedClade>        clades;          // captured subtree + BLs
     std::vector<std::pair<int,int>>   clade_anchor;    // parallel, in A' ids
+    std::vector<int>                  clade_rank;      // order along anchor (dist to ref_real)
+    std::string                       ref_real;        // fixed real leaf, the rank origin
 };
+
+// BFS hop-distance between two nodes of an AdjTree (INVALID if unreachable).
+int adj_dist(const AdjTree& a, int src, int dst) {
+    if (src == dst) return 0;
+    std::queue<int> q; q.push(src);
+    std::unordered_map<int,int> d; d[src] = 0;
+    while (!q.empty()) {
+        int u = q.front(); q.pop();
+        auto it = a.adj.find(u);
+        if (it == a.adj.end()) continue;
+        for (auto& pr : it->second) {
+            if (d.count(pr.first)) continue;
+            d[pr.first] = d[u] + 1;
+            if (pr.first == dst) return d[pr.first];
+            q.push(pr.first);
+        }
+    }
+    return INVALID;
+}
 
 // Prune {interest} ∪ flatten(inherited); capture each inherited clade's subtree.
 SidePrep prep_side(const std::string& newick,
@@ -119,12 +140,32 @@ SidePrep prep_side(const std::string& newick,
         detach_clade(full, is);                       // suppress interest, discard
     }
     auto clades = find_inherited_clades(full, inh_names);
+
+    // Reference real leaf (smallest name) — the fixed origin for ordering clades
+    // that collapse onto a shared anchor edge. A chain of inherited bounded by
+    // reals only at its ends (T12—c1·T14—c2·T9—rest) collapses c1,c2 to ONE
+    // anchor when both inherited are pruned, so T14 and T9 share an anchor and
+    // must be restored in their along-edge order, captured here as hop-distance
+    // from ref_real to each clade's host node.
+    std::string ref_real;
+    int ref_node = INVALID;
+    for (auto& kv : full.leaf_name)
+        if (!inh_names.count(kv.second) && kv.second != interest &&
+            full.adj.count(kv.first) &&                    // still connected
+            (ref_real.empty() || kv.second < ref_real)) {
+            ref_real = kv.second; ref_node = kv.first;
+        }
+
     for (auto& cset : clades) {
         AdjTree acopy = full;                         // interest already removed
         DetachedClade cap = detach_clade(acopy, cset);
+        int host = find_stem(full, cset).first;       // host node in B_noO
+        int rank = (ref_node == INVALID) ? 0 : adj_dist(full, host, ref_node);
         sp.clades.push_back(std::move(cap));
         sp.clade_anchor.push_back(pr.anchors[rem_idx[*cset.begin()]]);
+        sp.clade_rank.push_back(rank);
     }
+    sp.ref_real = ref_real;
     return sp;
 }
 
@@ -314,36 +355,80 @@ MergeResult run_merge(const MergeInput& in, const MSA& full, SubstModel& model,
     AdjTree M_search = M;
 
     // ── Restore inherited clades ─────────────────────────────────────────────
+    // Clades that collapse onto a SHARED anchor edge (a chain of inherited with
+    // reals only at the ends) must be put back in their along-edge order, else
+    // two of them swap and the side is no longer faithful. Group by anchor; for
+    // a shared anchor, chain the clades from the ref_real end outward in rank
+    // order so the original ordering is reproduced.
     const int CLADE_BAND = A.tree.n_nodes + B.tree.n_nodes + 1000;
     auto restore = [&](std::vector<DetachedClade>& clades,
                        std::vector<std::pair<int,int>>& anchors,
+                       std::vector<int>& ranks, const std::string& ref_real,
                        int off, int cx, int cy, int newNode, int band) {
+        // Group clade indices by normalized (offset) anchor edge.
+        std::map<std::pair<int,int>, std::vector<size_t>> groups;
         for (size_t k = 0; k < clades.size(); ++k) {
-            DetachedClade d = offset_clade(clades[k], band + (int)k * 100000);
             int p = anchors[k].first + off, q = anchors[k].second + off;
-            bool is_conn = (std::min(p, q) == std::min(cx, cy) &&
-                            std::max(p, q) == std::max(cx, cy));
-            std::pair<int,int> e;
-            if (is_conn) {
-                // Connector landed on this clade's anchor edge → the edge is now
-                // (cx,newNode) and (newNode,cy). Score the whole clade on each
-                // sub-edge and keep the better.
-                e = choose_split_subedge(M_search, d, cx, newNode, cy, full, model);
-                if (!edge_exists(M, e.first, e.second))   // double-consumed: fall back
-                    e = region_edge(M, p, q);
-            } else if (edge_exists(M, p, q)) {
-                e = {p, q};                                // anchor intact
-            } else {
-                // A previous inherited graft already split this anchor edge
-                // (strung-along clades sharing one anchor). Attach in the region.
-                e = region_edge(M, p, q);
+            groups[{std::min(p,q), std::max(p,q)}].push_back(k);
+        }
+        // Reference real node in M (for choosing the near anchor endpoint).
+        int ref_id = INVALID;
+        if (!ref_real.empty())
+            for (auto& kv : M.leaf_name)
+                if (kv.second == ref_real) { ref_id = kv.first; break; }
+
+        auto place_one = [&](size_t k, int eu, int ev) {
+            DetachedClade d = offset_clade(clades[k], band + (int)k * 100000);
+            regraft_clade_on(M, d, eu, ev, 0.5);
+        };
+
+        for (auto& g : groups) {
+            int p = g.first.first, q = g.first.second;
+            std::vector<size_t>& idx = g.second;
+
+            if (idx.size() == 1) {
+                size_t k = idx[0];
+                bool is_conn = (std::min(p, q) == std::min(cx, cy) &&
+                                std::max(p, q) == std::max(cx, cy));
+                if (is_conn) {
+                    DetachedClade d = offset_clade(clades[k], band + (int)k * 100000);
+                    auto e = choose_split_subedge(M_search, d, cx, newNode, cy, full, model);
+                    if (!edge_exists(M, e.first, e.second)) e = region_edge(M, p, q);
+                    place_one(k, e.first, e.second);
+                } else if (edge_exists(M, p, q)) {
+                    place_one(k, p, q);
+                } else {
+                    auto e = region_edge(M, p, q);
+                    place_one(k, e.first, e.second);
+                }
+                continue;
             }
-            regraft_clade_on(M, d, e.first, e.second, 0.5);
+
+            // Shared anchor: order the clades along the edge. near = the anchor
+            // endpoint closer to ref_real; chain from near toward far in rank
+            // order (smallest rank = closest to ref_real = nearest `near`).
+            int dp = (ref_id == INVALID) ? 0 : adj_dist(M, ref_id, p);
+            int dq = (ref_id == INVALID) ? 0 : adj_dist(M, ref_id, q);
+            int near, far;
+            if (dp == INVALID || dq == INVALID) { near = std::min(p,q); far = std::max(p,q); }
+            else if (dp <= dq)                  { near = p; far = q; }
+            else                                { near = q; far = p; }
+
+            std::sort(idx.begin(), idx.end(),
+                      [&](size_t a, size_t b){ return ranks[a] < ranks[b]; });
+
+            int cur = near;
+            for (size_t k : idx) {
+                auto e = region_edge(M, cur, far);   // current edge cur -> far
+                int m = M.fresh;                     // node regraft_clade_on will insert
+                place_one(k, e.first, e.second);
+                cur = m;                             // advance outward toward far
+            }
         }
     };
-    restore(A.clades, A.clade_anchor, 0,
+    restore(A.clades, A.clade_anchor, A.clade_rank, A.ref_real, 0,
             best_eA.first, best_eA.second, newA, CLADE_BAND);
-    restore(B.clades, B.clade_anchor, B_off,
+    restore(B.clades, B.clade_anchor, B.clade_rank, B.ref_real, B_off,
             best_eB.first + B_off, best_eB.second + B_off, newB, CLADE_BAND + 50000000);
 
     std::vector<double> M_bl;
