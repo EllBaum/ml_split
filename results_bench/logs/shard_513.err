@@ -1,2 +1,0 @@
-[2026-06-24T18:45:18.644] error: *** JOB 17751801 ON compute-0-56 CANCELLED AT 2026-06-24T18:45:18 DUE to SIGNAL Terminated ***
-ERROR random_tree_514: cmd failed (1): /groups/pupko/ellabaumer/miniconda3/envs/raxmlng/bin/raxml-ng --evaluate --msa /groups/pupko/ellabaumer/sim_trees/MSAs_200/random_tree_514.fasta --tree /groups/pupko/ellabaumer/sim_trees/trees_200/random_tree_514.nwk --model JC --opt-branches off --opt-model off --threads 1 --force p
