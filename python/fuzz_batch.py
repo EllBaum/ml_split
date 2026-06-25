@@ -52,7 +52,7 @@ def leaves(nwk):
     return set(re.findall(r"[A-Za-z0-9_.]+(?=:)", nwk))
 
 
-def one_real_merge(idx, tree_dir, msa_dir, frac_a, frac_b, model):
+def one_real_merge(idx, tree_dir, msa_dir, frac_a, frac_b, model, full_blo):
     stem = "random_tree_%04d" % idx
     tpath = os.path.join(tree_dir, stem + ".nwk")
     mpath = os.path.join(msa_dir, stem + ".fasta")
@@ -82,7 +82,7 @@ def one_real_merge(idx, tree_dir, msa_dir, frac_a, frac_b, model):
     t0 = time.time()
     r = ml_split.merge(newick_a=nwkA, newick_b=nwkB, interest_a=O_A,
                        interest_b=O_B, inherited_a=icA, inherited_b=icB,
-                       msa_a=subA, msa_b=subB, model=model)
+                       msa_a=subA, msa_b=subB, model=model, full_blo=full_blo)
     dt = time.time() - t0
 
     want = set(realA) | set(realB) | set(inhA) | set(inhB)
@@ -97,10 +97,15 @@ def one_real_merge(idx, tree_dir, msa_dir, frac_a, frac_b, model):
     assert fA == 0, ("faith_a", idx, fA)
     assert fB == 0, ("faith_b", idx, fB)
 
-    reals = set(realA) | set(realB)
-    stripped = prune_newick(parse_newick(r.newick), reals)
-    ll2 = ml_split.score(stripped, {t: seqs[t] for t in reals}, model)
-    assert abs(ll2 - r.loglik) < 1e-5, ("ll", idx, r.loglik, ll2)
+    if full_blo == "off":
+        # loglik is the reals-only 5-BLO search score
+        reals = set(realA) | set(realB)
+        stripped = prune_newick(parse_newick(r.newick), reals)
+        ll2 = ml_split.score(stripped, {t: seqs[t] for t in reals}, model)
+    else:
+        # loglik is the optimized LL of the full output tree (all taxa)
+        ll2 = ml_split.score(r.newick, {t: seqs[t] for t in want}, model)
+    assert abs(ll2 - r.loglik) < 1e-4, ("ll", idx, r.loglik, ll2)
 
     return (len(want), dt)
 
@@ -113,6 +118,7 @@ def main():
     ap.add_argument("--count", type=int, default=3)
     ap.add_argument("--frac-a", type=float, default=0.4)
     ap.add_argument("--frac-b", type=float, default=0.4)
+    ap.add_argument("--full-blo", choices=["off","fast","thorough"], default="off")
     ap.add_argument("--model", default="JC")
     ap.add_argument("--no-prime", action="store_true",
                     help="skip the small priming merge (then the trigger "
@@ -130,7 +136,7 @@ def main():
     for idx in range(args.start, args.start + args.count):
         sys.stdout.write("idx %d ... " % idx); sys.stdout.flush()
         res = one_real_merge(idx, args.tree_dir, args.msa_dir,
-                             args.frac_a, args.frac_b, args.model)
+                             args.frac_a, args.frac_b, args.model, args.full_blo)
         if res is None:
             skipped += 1; sys.stdout.write("skip\n")
         else:

@@ -1,11 +1,11 @@
-// merge_session.h — outgroup-based subtree merge.
+// merge_session.h -- outgroup-based subtree merge.
 //
 // Joins two subtrees (each carrying outgroups) at a connector, choosing the best
 // of a 14x14 window of attachment-edge pairs by 5-branch-optimized likelihood,
 // then restores the inherited outgroups. Returns (merged_newick, loglik).
 //
 // The two outgroups-of-interest are removed (their recorded anchors seed the two
-// windows) and NOT restored — each is a real leaf already present in the other
+// windows) and NOT restored -- each is a real leaf already present in the other
 // subtree. Inherited outgroups are removed for the search and restored after,
 // pointer-style (only which edge they sit on matters).
 
@@ -30,7 +30,7 @@ MSA slice_msa(const MSA& full, const std::vector<std::string>& names);
 std::vector<std::pair<int,int>> window_edges(const Tree& t, int a0, int a1,
                                              int n = 14);
 
-// ── Merge ─────────────────────────────────────────────────────────────────────
+// -- Merge ---------------------------------------------------------------------
 
 struct MergeInput {
     std::string newick_a, newick_b;
@@ -41,15 +41,16 @@ struct MergeInput {
 };
 
 struct MergeResult {
-    std::string newick;     // merged tree over realA ∪ realB (+ restored inherited)
-    double      loglik;     // 5-BLO-optimized joined LL over realA ∪ realB
+    std::string newick;     // merged tree over realA U realB (+ restored inherited)
+    double      loglik;     // 5-BLO-optimized joined LL over realA U realB
 };
 
-// Merge two subtrees. `full` must contain rows for at least realA ∪ realB (the
-// search taxa); it is sliced per side. Returns the best of the window×window
+// Merge two subtrees. `full` must contain rows for at least realA U realB (the
+// search taxa); it is sliced per side. Returns the best of the window?window
 // attachment candidates plus the inherited outgroups restored in place.
 MergeResult run_merge(const MergeInput& in, const MSA& full, SubstModel& model,
-                      int window = 14, double connector_init = 0.1);
+                      int window = 14, double connector_init = 0.1,
+                      const std::string& full_blo = "off");
 
 // Split-edge choice: when an inherited clade's anchor is the edge the connector
 // split (now two sub-edges (eu,mid) and (mid,ev) sharing connector node `mid`),

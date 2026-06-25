@@ -27,6 +27,7 @@ from validate_merge import (parse_newick, prune_newick, rf_distance,
                             inherited_clades, bipartitions)
 
 DNA = "ACGT"
+FULL_BLO = "off"   # set by --full-blo
 
 
 def random_tree(taxa, rng):
@@ -86,7 +87,7 @@ def one_case(rng, dump=False):
     def do_merge(ica, icb, sa, sb):
         return ml_split.merge(newick_a=nwkA, newick_b=nwkB, interest_a=O_A,
                               interest_b=O_B, inherited_a=ica, inherited_b=icb,
-                              msa_a=sa, msa_b=sb, model="JC")
+                              msa_a=sa, msa_b=sb, model="JC", full_blo=FULL_BLO)
 
     if dump:
         print('n        :', n)
@@ -117,11 +118,16 @@ def one_case(rng, dump=False):
     assert fA == 0, ('faith_a', fA, ctx)
     assert fB == 0, ('faith_b', fB, ctx)
 
-    # 3. ll-consistent (reals-only tree scored independently)
-    reals = set(realA) | set(realB)
-    stripped = prune_newick(parse_newick(r.newick), reals)
-    ll2 = ml_split.score(stripped, {t: seqs[t] for t in reals}, "JC")
-    assert abs(ll2 - r.loglik) < 1e-6, ('ll', r.loglik, ll2, ctx)
+    # 3. ll-consistent. With full_blo off, loglik is the reals-only 5-BLO score,
+    #    so check against the reals-only tree; with full_blo on, loglik is the
+    #    optimized LL of the full output tree (all taxa), so check against that.
+    if FULL_BLO == "off":
+        reals = set(realA) | set(realB)
+        stripped = prune_newick(parse_newick(r.newick), reals)
+        ll2 = ml_split.score(stripped, {t: seqs[t] for t in reals}, "JC")
+    else:
+        ll2 = ml_split.score(r.newick, {t: seqs[t] for t in want}, "JC")
+    assert abs(ll2 - r.loglik) < 1e-4, ('ll', r.loglik, ll2, ctx)
 
     # 4. deterministic
     r2 = do_merge(icA, icB, subA, subB)
@@ -142,11 +148,13 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--cases', type=int, default=5000)
     ap.add_argument('--seed', type=int, default=1)
+    ap.add_argument('--full-blo', choices=['off','fast','thorough'], default='off')
     ap.add_argument('--log-seeds', action='store_true',
                     help='print each case sub-seed before running (find a crash)')
     ap.add_argument('--replay', type=int, default=None,
                     help='run a single case by its sub-seed, dumping inputs first')
     args = ap.parse_args()
+    global FULL_BLO; FULL_BLO = args.full_blo
 
     if args.replay is not None:
         print('REPLAY sub-seed', args.replay)

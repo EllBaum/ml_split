@@ -1,4 +1,4 @@
-// merge_session.cpp — see merge_session.h.
+// merge_session.cpp -- see merge_session.h.
 #include "merge_session.h"
 #include <functional>
 #include <queue>
@@ -65,7 +65,7 @@ std::vector<std::pair<int,int>> window_edges(const Tree& t, int a0, int a1, int 
     return out;
 }
 
-// ── Merge ───────────────────────────────────────────────────────────────────
+// -- Merge -------------------------------------------------------------------
 #include "likelihood_scorer.h"
 #include <functional>
 #include <limits>
@@ -105,7 +105,7 @@ int adj_dist(const AdjTree& a, int src, int dst) {
     return INVALID;
 }
 
-// Prune {interest} ∪ flatten(inherited); capture each inherited clade's subtree.
+// Prune {interest} U flatten(inherited); capture each inherited clade's subtree.
 SidePrep prep_side(const std::string& newick,
                    const std::string& interest,
                    const std::vector<std::vector<std::string>>& inherited) {
@@ -133,7 +133,7 @@ SidePrep prep_side(const std::string& newick,
     // Build the full adjacency, remove the interest outgroup, then auto-detect
     // the maximal inherited subtrees and capture each WITH its structure. The
     // anchor of each clade is the A' edge where it hangs (any member leaf's
-    // recorded anchor — all members of a connected clade collapse to one edge).
+    // recorded anchor -- all members of a connected clade collapse to one edge).
     AdjTree full = AdjTree::from(t, bl.data());
     if (!interest.empty()) {
         std::set<std::string> is{interest};
@@ -141,9 +141,9 @@ SidePrep prep_side(const std::string& newick,
     }
     auto clades = find_inherited_clades(full, inh_names);
 
-    // Reference real leaf (smallest name) — the fixed origin for ordering clades
+    // Reference real leaf (smallest name) -- the fixed origin for ordering clades
     // that collapse onto a shared anchor edge. A chain of inherited bounded by
-    // reals only at its ends (T12—c1·T14—c2·T9—rest) collapses c1,c2 to ONE
+    // reals only at its ends (T12--c1*T14--c2*T9--rest) collapses c1,c2 to ONE
     // anchor when both inherited are pruned, so T14 and T9 share an anchor and
     // must be restored in their along-edge order, captured here as hop-distance
     // from ref_real to each clade's host node.
@@ -203,7 +203,7 @@ std::pair<int,int> region_edge(const AdjTree& M, int p, int q) {
 
 // Maximal connected all-inherited subtrees of M (with the interest outgroup
 // already removed). Two inherited clades can share a host anchor edge only if
-// they are connected through internal nodes — in which case they are returned
+// they are connected through internal nodes -- in which case they are returned
 // as ONE clade with their relative structure intact. A real taxon between two
 // inherited groups would split the host edge, giving them distinct anchors.
 // So this grouping makes restore collision-free and structure-preserving.
@@ -273,7 +273,8 @@ std::pair<int,int> choose_split_subedge(const AdjTree& m_search,
 }
 
 MergeResult run_merge(const MergeInput& in, const MSA& full, SubstModel& model,
-                      int window, double connector_init) {
+                      int window, double connector_init,
+                      const std::string& full_blo) {
     SidePrep A = prep_side(in.newick_a, in.interest_a, in.inherited_a);
     SidePrep B = prep_side(in.newick_b, in.interest_b, in.inherited_b);
 
@@ -319,7 +320,7 @@ MergeResult run_merge(const MergeInput& in, const MSA& full, SubstModel& model,
         }
     }
 
-    // ── Assemble the winner in AdjTree token space ───────────────────────────
+    // -- Assemble the winner in AdjTree token space ---------------------------
     const int B_off = A.tree.n_nodes;
     AdjTree M;
     auto add_side = [&](const Tree& t, const std::vector<double>& bl, int off) {
@@ -350,11 +351,11 @@ MergeResult run_merge(const MergeInput& in, const MSA& full, SubstModel& model,
 
     M.connect(newA, newB, best_bl5[0]);
 
-    // Snapshot the search tree (realA ∪ realB, no inherited) for split-edge
+    // Snapshot the search tree (realA U realB, no inherited) for split-edge
     // likelihood scoring below.
     AdjTree M_search = M;
 
-    // ── Restore inherited clades ─────────────────────────────────────────────
+    // -- Restore inherited clades ---------------------------------------------
     // Clades that collapse onto a SHARED anchor edge (a chain of inherited with
     // reals only at the ends) must be put back in their along-edge order, else
     // two of them swap and the side is no longer faithful. Group by anchor; for
@@ -435,7 +436,25 @@ MergeResult run_merge(const MergeInput& in, const MSA& full, SubstModel& model,
     Tree M_tree = M.to_tree(M_bl);
 
     MergeResult res;
-    res.newick = M_tree.to_newick(M_bl.data());
-    res.loglik = best_ll;
+    if (full_blo == "off") {
+        res.newick = M_tree.to_newick(M_bl.data());
+        res.loglik = best_ll;
+    } else {
+        // Optional full-tree BLO on the winning merged tree: re-optimize ALL
+        // branch lengths (not just the 5 at the connector), from the assembled
+        // tree. "fast" -> lh_epsilon 10, "thorough" -> 0.1. Topology is
+        // untouched, so faithfulness is preserved; res.loglik becomes the
+        // optimized log-likelihood of the actual returned tree (all taxa),
+        // not the reals-only 5-BLO search score.
+        if (full_blo != "fast" && full_blo != "thorough")
+            throw std::invalid_argument(
+                "full_blo must be \"off\", \"fast\", or \"thorough\"");
+        const double eps = (full_blo == "thorough") ? 0.1 : 10.0;
+        MSA sl = slice_msa(full, M_tree.taxon_names);
+        LikelihoodScorer S(M_tree, sl, model, M_bl.data());
+        res.loglik = S.optimize_branch_lengths(full_blo, eps);
+        std::vector<double> opt_bl = S.get_bl_array();
+        res.newick = M_tree.to_newick(opt_bl.data());
+    }
     return res;
 }

@@ -1,4 +1,4 @@
-// bindings.cpp — Python interface for ml_split (outgroup-based subtree merge).
+// bindings.cpp -- Python interface for ml_split (outgroup-based subtree merge).
 //
 //   import ml_split
 //   r = ml_split.merge(newick_a, newick_b, interest_a, interest_b, msa,
@@ -6,7 +6,7 @@
 //   r.newick, r.loglik
 //
 // msa is either a FASTA path (str) or a {name: sequence} dict. It must contain
-// rows for realA ∪ realB and for any inherited taxa (the split-edge case scores
+// rows for realA U realB and for any inherited taxa (the split-edge case scores
 // inherited clades, which needs their sequences).
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
@@ -88,7 +88,7 @@ PYBIND11_MODULE(ml_split, mod) {
         py::arg("newick"), py::arg("msa"), py::arg("model") = "JTT",
         "Log-likelihood of `newick` evaluated at its own branch lengths, on the "
         "given alignment (path or dict) under `model`. No BL/topology optimization "
-        "— for cross-checking a fixed tree against e.g. raxml-ng --opt-branches off.");
+        "-- for cross-checking a fixed tree against e.g. raxml-ng --opt-branches off.");
 
     mod.def("merge",
         [](std::string newick_a, std::string newick_b,
@@ -96,7 +96,8 @@ PYBIND11_MODULE(ml_split, mod) {
            py::object msa, py::object msa_a, py::object msa_b,
            std::vector<std::vector<std::string>> inherited_a,
            std::vector<std::vector<std::string>> inherited_b,
-           std::string model, int window, double connector_init) {
+           std::string model, int window, double connector_init,
+           std::string full_blo) {
             MSA full = (!msa.is_none())
                 ? build_msa(msa)
                 : (!msa_a.is_none() && !msa_b.is_none())
@@ -108,7 +109,7 @@ PYBIND11_MODULE(ml_split, mod) {
             in.newick_a   = std::move(newick_a);   in.newick_b   = std::move(newick_b);
             in.interest_a = std::move(interest_a); in.interest_b = std::move(interest_b);
             in.inherited_a = std::move(inherited_a); in.inherited_b = std::move(inherited_b);
-            return run_merge(in, full, *mdl, window, connector_init);
+            return run_merge(in, full, *mdl, window, connector_init, full_blo);
         },
         py::arg("newick_a"), py::arg("newick_b"),
         py::arg("interest_a"), py::arg("interest_b"),
@@ -120,6 +121,7 @@ PYBIND11_MODULE(ml_split, mod) {
         py::arg("model") = "JTT",
         py::arg("window") = 14,
         py::arg("connector_init") = 0.1,
+        py::arg("full_blo") = "off",
         "Merge two subtrees. Alignment as msa=(path|dict) OR msa_a=dict, msa_b=dict "
         "(merged by name). inherited_a/b are lists of clades (lists of leaf names).");
 }
