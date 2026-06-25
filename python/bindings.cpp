@@ -123,7 +123,7 @@ PYBIND11_MODULE(ml_split, mod) {
         py::arg("window") = 14,
         py::arg("connector_init") = 0.1,
         py::arg("full_blo") = "off",
-        py::arg("eps_5blo") = 0.1,
+        py::arg("eps_5blo") = 1000.0,
         py::arg("eps_fulltree") = -1.0,
         "Merge two subtrees. Alignment as msa=(path|dict) OR msa_a=dict, msa_b=dict "
         "(merged by name). inherited_a/b are lists of clades (lists of leaf names).");

@@ -9,7 +9,7 @@
 // FUSED_SCORE (env, default off): fold pi into the pendant contribution once
 // per prune (wpv = π⊙pv_contrib) and score each no-BLO candidate with one dot
 // product instead of clv_mul+scale+π-sum. Bit-identical (both operands are
-// already O(1)-scaled, so the dropped final scale never fires). #TDL - remove safely.
+// already O(1)-scaled, so the dropped final scale never fires)
 static bool _fused_score_enabled() {
     static const bool v = [] {
         const char* e = std::getenv("FUSED_SCORE");
