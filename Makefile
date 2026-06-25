@@ -1,4 +1,4 @@
-# Makefile — ml_split (outgroup-based subtree merge)
+# Makefile -- ml_split (outgroup-based subtree merge)
 #
 #   make            build all test binaries
 #   make test       build + run the test suites
@@ -36,7 +36,7 @@ $(BUILD)/%.o: $(SRC_DIR)/%.cpp | $(BUILD)
 $(BUILD)/%.o: $(TEST_DIR)/%.cpp | $(BUILD)
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
-# ── scorer umbrella TU ────────────────────────────────────────────────────────
+# -- scorer umbrella TU --------------------------------------------------------
 SCORER_PIECES := $(SRC_DIR)/likelihood_scorer_core.cpp $(SRC_DIR)/likelihood_scorer_kernels.cpp \
                  $(SRC_DIR)/likelihood_scorer_clv.cpp $(SRC_DIR)/likelihood_scorer_roll.cpp \
                  $(SRC_DIR)/likelihood_scorer_commit.cpp $(SRC_DIR)/likelihood_scorer_blo.cpp \
@@ -50,7 +50,7 @@ SCORER_HDRS   := $(SRC_DIR)/likelihood_scorer.h $(SRC_DIR)/subst_model.h \
 $(BUILD)/scorer.o: $(SRC_DIR)/likelihood_scorer_unit.cpp $(SCORER_PIECES) $(SCORER_HDRS) | $(BUILD)
 	$(CXX) $(CXXFLAGS) -c $(SRC_DIR)/likelihood_scorer_unit.cpp -o $@
 
-# ── object header deps ────────────────────────────────────────────────────────
+# -- object header deps --------------------------------------------------------
 $(BUILD)/tree.o:          $(SRC_DIR)/tree.cpp $(SRC_DIR)/tree.h
 $(BUILD)/merge_prep.o:    $(SRC_DIR)/merge_prep.cpp $(SRC_DIR)/merge_prep.h $(SRC_DIR)/tree.h
 $(BUILD)/msa.o:           $(SRC_DIR)/msa.cpp $(SRC_DIR)/msa.h
@@ -69,7 +69,7 @@ $(BUILD)/test_split_choice.o:  $(TEST_DIR)/test_split_choice.cpp $(SRC_DIR)/merg
 $(BUILD)/test_msa_dict.o:      $(TEST_DIR)/test_msa_dict.cpp $(SRC_DIR)/msa.h
 $(BUILD)/test_coanchored_order.o: $(TEST_DIR)/test_coanchored_order.cpp $(SRC_DIR)/merge_session.h $(SCORER_HDRS)
 
-# ── link ──────────────────────────────────────────────────────────────────────
+# -- link ----------------------------------------------------------------------
 MERGE_OBJ := $(BUILD)/scorer.o $(BUILD)/tree.o $(BUILD)/msa.o \
              $(BUILD)/merge_prep.o $(BUILD)/merge_session.o
 
@@ -112,7 +112,7 @@ clean:
 test_coanchored_order: $(MERGE_OBJ) $(BUILD)/test_coanchored_order.o
 	$(CXX) $(CXXFLAGS) $^ -o $@
 
-# ── Pure-evaluation benchmark ────────────────────────────────────────────────
+# -- Pure-evaluation benchmark ------------------------------------------------
 # Built with the DELIVERED wheel's flags (-mavx2 global; AVX-512 kernels still
 # active via their target() attribute + runtime dispatch), so the number
 # reflects what the colleagues actually run. For a peak engine-vs-raxml number

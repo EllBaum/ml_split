@@ -2,7 +2,7 @@
 // Part of the single-TU umbrella (likelihood_scorer_unit.cpp); not compiled standalone.
 #include "likelihood_scorer.h"
 
-// _nr_branch_with_clvs — pure NR helper, no global state.
+// _nr_branch_with_clvs -- pure NR helper, no global state.
 // Operates on supplied flanking CLVs A and B (no this-edge P applied), used by
 // triplet BLO in try_add, which keeps A/B in scratch and never mutates the tree.
 // f/fp are the 1st/2nd derivs of the log-likelihood; NR maintains a bracket
@@ -109,7 +109,7 @@ double LikelihoodScorer::_nr_branch_with_clvs_with_status(
 
 // _build_sumtable
 // State-major S[m*L + l] (matches _p_apply output, no transpose needed):
-//   S[m,l] = (R @ B)[m,l] · (Lpi @ A)[m,l],  Lpi[m,k] = L_mat[k,m]·pi[k].
+//   S[m,l] = (R @ B)[m,l] * (Lpi @ A)[m,l],  Lpi[m,k] = L_mat[k,m]*pi[k].
 // Built with one fused _p_apply_pair (both projections in registers, no
 // intermediate buffer). Paired with the state-major reader in
 // _nr_branch_with_sumtable.
@@ -470,7 +470,7 @@ double LikelihoodScorer::optimize_branch_lengths(const std::string& mode,
                 } else {
                     // Refresh p_arr for this edge so later branches in the sweep
                     // see fresh P. p_matrix(t) is identical for both directions
-                    // — compute once, memcpy to the mirror slot.
+                    // -- compute once, memcpy to the mirror slot.
                     double t_uv = bl_[u * n_ + v];
                     int s_uv = _slot_of(u, v);
                     int s_vu = _slot_of(v, u);
@@ -627,21 +627,21 @@ double LikelihoodScorer::_optimize_triplets(double lh_epsilon,
             std::vector<double> Pb(K_*K_), Pc(K_*K_), Pa(K_*K_);
             std::vector<double> RbP(KL), RcP(KL), RaP(KL);
 
-            // Step 1: optimize ta — Q_bc = (Rb@P(tb)) * (Rc@P(tc))
+            // Step 1: optimize ta -- Q_bc = (Rb@P(tb)) * (Rc@P(tc))
             model_->p_matrix(tb, Pb.data()); model_->p_matrix(tc, Pc.data());
             p_apply(Pb, Rb, RbP); p_apply(Pc, Rc, RcP);
             std::vector<double> Q_bc(KL);
             for (int i = 0; i < KL; i++) Q_bc[i] = RbP[i] * RcP[i];
             double ta_new = nr_1d(Ra, Q_bc, ta);
 
-            // Step 2: optimize tb — Q_ac = (Ra@P(ta_new)) * (Rc@P(tc))
+            // Step 2: optimize tb -- Q_ac = (Ra@P(ta_new)) * (Rc@P(tc))
             model_->p_matrix(ta_new, Pa.data());
             p_apply(Pa, Ra, RaP);
             std::vector<double> Q_ac(KL);
             for (int i = 0; i < KL; i++) Q_ac[i] = RaP[i] * RcP[i];
             double tb_new = nr_1d(Rb, Q_ac, tb);
 
-            // Step 3: optimize tc — Q_ab = (Ra@P(ta_new)) * (Rb@P(tb_new))
+            // Step 3: optimize tc -- Q_ab = (Ra@P(ta_new)) * (Rb@P(tb_new))
             model_->p_matrix(tb_new, Pb.data());
             p_apply(Pb, Rb, RbP);
             std::vector<double> Q_ab(KL);
@@ -693,8 +693,8 @@ std::vector<double> LikelihoodScorer::get_bl_array() const {
 // (pu, ra), for an SPR(pu, pv, ra, rb) with ra a pre-SPR neighbor of pu
 // (radius-1 / NNI). Post-SPR neighborhood:
 //
-//          pv ─────── pu ─────── ra ─────── ra_other
-//                     │           │
+//          pv ------- pu ------- ra ------- ra_other
+//                     |           |
 //                     rb          nb_other
 //
 //   (pu, ra)       new NNI center edge
@@ -711,7 +711,7 @@ std::vector<double> LikelihoodScorer::get_bl_array() const {
 // preserved; (pu,rb) = bl_pre(ra,rb)/2 (split); (ra,nb_other) =
 // bl_pre(pu,ra) + bl_pre(pu,nb_other) (merged bypass sum).
 //
-// Caller must verify ra ∈ {nb1,nb2} and supply nb_other / ra_other. Returns
+// Caller must verify ra in {nb1,nb2} and supply nb_other / ra_other. Returns
 // the optimized post-SPR LL; bl_out[5] = {(pu,ra),(pu,pv),(pu,rb),
 // (ra,nb_other),(ra,ra_other)}.
 double LikelihoodScorer::_optimize_five_branches_at_nni(
@@ -732,10 +732,10 @@ double LikelihoodScorer::_optimize_five_branches_at_nni(
     const double* pi = model_->pi();
     const int*    w  = msa_->weights.data();
 
-    // ── 1. Boundary CLVs (4) ─────────────────────────────────────────────────
+    // -- 1. Boundary CLVs (4) -------------------------------------------------
     // Computed against the pre-SPR tree; the subtrees beyond pv/rb/nb_other/
     // ra_other don't change in the SPR, so they're valid post-SPR too. When the
-    // caller passes {pv,rb,ro,nb}_clv_in (it already has them — pv_raw, rb_raw,
+    // caller passes {pv,rb,ro,nb}_clv_in (it already has them -- pv_raw, rb_raw,
     // side_raw, and the DFS seed buffer), reuse them; else _clv fresh.
     thread_local std::vector<double> bnd_pv_clv_buf, bnd_pv_ls_buf;
     thread_local std::vector<double> bnd_rb_clv_buf, bnd_rb_ls_buf;
@@ -798,7 +798,7 @@ double LikelihoodScorer::_optimize_five_branches_at_nni(
         bnd_ro_ls  = bnd_ro_ls_buf.data();
     }
 
-    // ── 2. Initial branch lengths (split/merge convention) ───────────────────
+    // -- 2. Initial branch lengths (split/merge convention) -------------------
     // Merge hook: init_bl5 supplies them directly (order = bl_out), so the
     // hypothetical connector nodes need no entry in bl_.
     double bl_pu_ra, bl_pu_pv, bl_pu_rb, bl_ra_nb, bl_ra_ro;
@@ -816,7 +816,7 @@ double LikelihoodScorer::_optimize_five_branches_at_nni(
         bl_ra_ro = bl_[ra * n_ + ra_other];
     }
 
-    // ── 3. Directional CLVs at pu and ra (3 each) ────────────────────────────
+    // -- 3. Directional CLVs at pu and ra (3 each) ----------------------------
     // clv_pu_toward_X = CLV at pu from its two sides other than X (and likewise
     // for ra). Materialized up front; the 2 affected ones refreshed after each
     // branch update. Each is a few _p_apply + _clv_mul of boundary contribs.
@@ -836,6 +836,22 @@ double LikelihoodScorer::_optimize_five_branches_at_nni(
                                      ls_ra_toward_pu(L_),
                                      ls_ra_toward_nb(L_),
                                      ls_ra_toward_ro(L_);
+    // These thread_local buffers are constructor-sized on the FIRST call in a
+    // thread only; that size is never re-evaluated. A later call in the same
+    // thread with a larger K_*L_ (e.g. a different alignment with more patterns)
+    // would otherwise reuse the first call's smaller buffers and let the SIMD
+    // kernels write past their ends (heap-buffer-overflow). Resize to the
+    // current dims every call -- a no-op when unchanged -- matching the
+    // bnd_*_clv_buf.resize() pattern above.
+    for (auto* v : {&P_pu_pv, &P_pu_rb, &P_pu_ra, &P_ra_nb, &P_ra_ro})
+        v->resize(KK);
+    for (auto* v : {&contrib_pv, &contrib_rb, &contrib_nb, &contrib_ro,
+                    &clv_pu_toward_ra, &clv_pu_toward_pv, &clv_pu_toward_rb,
+                    &clv_ra_toward_pu, &clv_ra_toward_nb, &clv_ra_toward_ro})
+        v->resize(KL);
+    for (auto* v : {&ls_pu_toward_ra, &ls_pu_toward_pv, &ls_pu_toward_rb,
+                    &ls_ra_toward_pu, &ls_ra_toward_nb, &ls_ra_toward_ro})
+        v->resize(L_);
 
     // Boundary contribs through their immediate edges; used by all three
     // "toward" combinations at each internal node.
@@ -884,6 +900,9 @@ double LikelihoodScorer::_optimize_five_branches_at_nni(
     thread_local std::vector<double> P_pu_ra_mat(KK);
     thread_local std::vector<double> pu_thru_ra_at_ra(KL),
                                      ra_thru_pu_at_pu(KL);
+    P_pu_ra_mat.resize(KK);            // see thread_local-resize note above
+    pu_thru_ra_at_ra.resize(KL);
+    ra_thru_pu_at_pu.resize(KL);
 
     auto rebuild_internal_pairs = [&]() {
         model_->p_matrix(bl_pu_ra, P_pu_ra_mat.data());
@@ -909,10 +928,11 @@ double LikelihoodScorer::_optimize_five_branches_at_nni(
 
     rebuild_internal_pairs();
 
-    // ── 4. Gauss-Seidel sweeps over the 5 branches ───────────────────────────
+    // -- 4. Gauss-Seidel sweeps over the 5 branches ---------------------------
     // Each branch: NR via sumtable from the directional CLVs at its endpoints,
     // then refresh the affected boundary-contrib + internal-pair CLVs.
     thread_local std::vector<double> S(KL);  // sumtable
+    S.resize(KL);                            // see thread_local-resize note above
 
     const double nr_tol_5blo      = 1e-7;  // match production triplet
     const int    nr_max_iter_5blo = 30;
@@ -1020,8 +1040,9 @@ double LikelihoodScorer::_optimize_five_branches_at_nni(
         _p_apply(P_pu_ra_mat.data(), clv_ra_toward_pu.data(),
                  ra_thru_pu_at_pu.data());
 
-        // LL at (pu,ra): sum_k pi[k]·clv_pu_toward_ra[k]·ra_thru_pu_at_pu[k].
+        // LL at (pu,ra): sum_k pi[k]*clv_pu_toward_ra[k]*ra_thru_pu_at_pu[k].
         thread_local std::vector<double> site_lik(L_);
+        site_lik.resize(L_);                 // see thread_local-resize note above
         for (int l = 0; l < L_; ++l) {
             double s = 0.0;
             for (int k = 0; k < K_; ++k) {

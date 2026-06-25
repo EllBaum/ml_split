@@ -18,6 +18,6 @@
   "shard_count": 600,
   "resume": true,
   "keep_trees": false,
-  "git_commit": null,
+  "git_commit": "47f6e5087d78fc99e6a8b1c2beb95f79e77b7dc6",
   "n_msas_in_shard": 1
 }

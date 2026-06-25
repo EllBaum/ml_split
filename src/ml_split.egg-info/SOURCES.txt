@@ -11,3 +11,5 @@ src/ml_split.egg-info/PKG-INFO
 src/ml_split.egg-info/SOURCES.txt
 src/ml_split.egg-info/dependency_links.txt
 src/ml_split.egg-info/top_level.txt
+tests/test_smoke_wheel.py
+tests/test_threadlocal_resize.py

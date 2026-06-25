@@ -46,6 +46,11 @@ public:
 
     double score() const { return score_; }
 
+    // BENCH ONLY: force a full from-scratch evaluation (all CLVs + root LL),
+    // reusing the already-allocated buffers. Mirrors what raxml-ng --evaluate
+    // does per tree (recompute, no re-alloc). Not part of the merge API.
+    double recompute_full() { _full_recompute(); return score_; }
+
     // Every _clv materialization (memcpy-reuse counts; _clv_view excluded). run_ml budget.
     long clv_calc_count() const { return clv_calc_count_; }
 
@@ -66,7 +71,7 @@ public:
 
     void commit(const LikelihoodSPRCandidate& cand);
 
-    // ── Merge hooks (used by MergeSession; this is a separate codebase) ────────
+    // -- Merge hooks (used by MergeSession; this is a separate codebase) --------
 
     int n_states()   const { return K_; }
     int n_patterns() const { return L_; }
@@ -74,7 +79,7 @@ public:
     // Directional CLV at `node` looking away from `excl` (and its log-scale),
     // over this scorer's pattern set. After construction the tree's CLVs are
     // materialized and clean, so for a frozen subtree this is a cheap cached
-    // read — the rigid-subtree boundary condition for a merge.
+    // read -- the rigid-subtree boundary condition for a merge.
     void clv(int node, int excl,
              std::vector<double>& clv_out, std::vector<double>& ls_out) const {
         clv_out.resize((size_t)K_ * L_);
@@ -84,7 +89,7 @@ public:
 
     // Join two frozen subtrees at a fresh connector and optimize the 5 branches
     // around it. Boundary CLVs are the directional CLVs at the two anchor edges:
-    // A side (pv, rb) from scorer_A, B side (nb, ro) from scorer_B — all over the
+    // A side (pv, rb) from scorer_A, B side (nb, ro) from scorer_B -- all over the
     // same (sliced) pattern set. init_bl5 = bl_out order =
     //   {connector, newA-pv, newA-rb, newB-nb, newB-ro}.
     // Call on either sub-scorer (model/K/L/weights are shared). Returns the
