@@ -1,7 +1,10 @@
 build/
-*.o
-*.so
-test_pruned
-test_merge_prep
+dist/
+*.egg-info/
 __pycache__/
-*.whl
+*.so
+*.o
+*.out
+*.err
+*.tar
+*.tar.gz

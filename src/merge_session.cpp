@@ -274,7 +274,8 @@ std::pair<int,int> choose_split_subedge(const AdjTree& m_search,
 
 MergeResult run_merge(const MergeInput& in, const MSA& full, SubstModel& model,
                       int window, double connector_init,
-                      const std::string& full_blo) {
+                      const std::string& full_blo,
+                      double eps_5blo, double eps_fulltree) {
     SidePrep A = prep_side(in.newick_a, in.interest_a, in.inherited_a);
     SidePrep B = prep_side(in.newick_b, in.interest_b, in.inherited_b);
 
@@ -312,7 +313,7 @@ MergeResult run_merge(const MergeInput& in, const MSA& full, SubstModel& model,
                 pv.data(), pvl.data(), rb.data(), rbl.data(),
                 bcache[j].nb.data(), bcache[j].nbl.data(),
                 bcache[j].ro.data(), bcache[j].rol.data(),
-                init5, bl5);
+                init5, bl5, eps_5blo);
             if (ll > best_ll) {
                 best_ll = ll; best_eA = eA; best_eB = winB[j];
                 std::copy(bl5, bl5 + 5, best_bl5);
@@ -449,7 +450,9 @@ MergeResult run_merge(const MergeInput& in, const MSA& full, SubstModel& model,
         if (full_blo != "fast" && full_blo != "thorough")
             throw std::invalid_argument(
                 "full_blo must be \"off\", \"fast\", or \"thorough\"");
-        const double eps = (full_blo == "thorough") ? 0.1 : 10.0;
+        const double eps = (eps_fulltree > 0.0)
+                             ? eps_fulltree
+                             : (full_blo == "thorough" ? 0.1 : 10.0);
         MSA sl = slice_msa(full, M_tree.taxon_names);
         LikelihoodScorer S(M_tree, sl, model, M_bl.data());
         res.loglik = S.optimize_branch_lengths(full_blo, eps);

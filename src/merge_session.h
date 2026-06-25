@@ -50,7 +50,8 @@ struct MergeResult {
 // attachment candidates plus the inherited outgroups restored in place.
 MergeResult run_merge(const MergeInput& in, const MSA& full, SubstModel& model,
                       int window = 14, double connector_init = 0.1,
-                      const std::string& full_blo = "off");
+                      const std::string& full_blo = "off",
+                      double eps_5blo = 0.1, double eps_fulltree = -1.0);
 
 // Split-edge choice: when an inherited clade's anchor is the edge the connector
 // split (now two sub-edges (eu,mid) and (mid,ev) sharing connector node `mid`),

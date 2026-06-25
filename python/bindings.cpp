@@ -97,7 +97,7 @@ PYBIND11_MODULE(ml_split, mod) {
            std::vector<std::vector<std::string>> inherited_a,
            std::vector<std::vector<std::string>> inherited_b,
            std::string model, int window, double connector_init,
-           std::string full_blo) {
+           std::string full_blo, double eps_5blo, double eps_fulltree) {
             MSA full = (!msa.is_none())
                 ? build_msa(msa)
                 : (!msa_a.is_none() && !msa_b.is_none())
@@ -109,7 +109,8 @@ PYBIND11_MODULE(ml_split, mod) {
             in.newick_a   = std::move(newick_a);   in.newick_b   = std::move(newick_b);
             in.interest_a = std::move(interest_a); in.interest_b = std::move(interest_b);
             in.inherited_a = std::move(inherited_a); in.inherited_b = std::move(inherited_b);
-            return run_merge(in, full, *mdl, window, connector_init, full_blo);
+            return run_merge(in, full, *mdl, window, connector_init, full_blo,
+                             eps_5blo, eps_fulltree);
         },
         py::arg("newick_a"), py::arg("newick_b"),
         py::arg("interest_a"), py::arg("interest_b"),
@@ -122,6 +123,8 @@ PYBIND11_MODULE(ml_split, mod) {
         py::arg("window") = 14,
         py::arg("connector_init") = 0.1,
         py::arg("full_blo") = "off",
+        py::arg("eps_5blo") = 0.1,
+        py::arg("eps_fulltree") = -1.0,
         "Merge two subtrees. Alignment as msa=(path|dict) OR msa_a=dict, msa_b=dict "
         "(merged by name). inherited_a/b are lists of clades (lists of leaf names).");
 }
